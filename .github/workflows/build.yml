@@ -43,6 +43,9 @@ jobs:
 
       - name: Generate debug keystore
         run: |
+          # Never reuse a keystore from the checkout: a stale one makes keytool fail
+          # with "alias <androiddebugkey> already exists" and stops the job.
+          rm -f debug.keystore
           keytool -genkeypair -v \
             -keystore debug.keystore \
             -alias androiddebugkey \
