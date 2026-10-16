@@ -190,17 +190,20 @@ object SecurityEngine {
         if (cert == null) {
             return if (persian) "گواهی امنیتی در دسترس نیست" else "No certificate information"
         }
+        // SslCertificate.getIssuedBy() returns an X509Certificate, whose subject is an
+        // X500Principal - `.name` does not exist on it. /CN= is the attribute we want.
         val issuerRaw = try {
-            cert.issuedBy?.name ?: ""
+            cert.issuedBy?.subjectX500Principal?.name ?: ""
         } catch (_: Exception) {
             ""
         }
+        // X500Principal.name can be RFC2253 ("CN=Foo, O=Bar") or RFC1779 ("CN=Foo, O=Bar")
+        // form; both use "CN=", so split on the comma and on "/" to cover either.
         val issuer = issuerRaw
-            .split(',')
+            .split(',', '/')
             .map { it.trim() }
             .firstOrNull { it.startsWith("CN=", ignoreCase = true) }
-            ?.removePrefix("CN=")
-            ?.removePrefix("cn=")
+            ?.substringAfter('=')
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: issuerRaw.take(60).ifBlank {
