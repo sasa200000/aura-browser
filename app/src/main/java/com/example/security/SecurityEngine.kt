@@ -190,25 +190,18 @@ object SecurityEngine {
         if (cert == null) {
             return if (persian) "گواهی امنیتی در دسترس نیست" else "No certificate information"
         }
-        // SslCertificate.getIssuedBy() returns an X509Certificate, whose subject is an
-        // X500Principal - `.name` does not exist on it. /CN= is the attribute we want.
-        val issuerRaw = try {
-            cert.issuedBy?.subjectX500Principal?.name ?: ""
+        // SslCertificate.getIssuedBy() returns a DName, which parses the distinguished
+        // name for us: cName is the CN, dName the full DN. (Neither DName nor the
+        // X509Certificate behind it exposes `.name`, and subjectX500Principal is not in
+        // the platform stub, so read the parsed fields directly.)
+        val issuer = try {
+            val dName = cert.issuedBy
+            listOfNotNull(dName?.cName, dName?.oName, dName?.dName)
+                .map { it.trim() }
+                .firstOrNull { it.isNotBlank() && !it.equals("Unknown", ignoreCase = true) }
         } catch (_: Exception) {
-            ""
-        }
-        // X500Principal.name can be RFC2253 ("CN=Foo, O=Bar") or RFC1779 ("CN=Foo, O=Bar")
-        // form; both use "CN=", so split on the comma and on "/" to cover either.
-        val issuer = issuerRaw
-            .split(',', '/')
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("CN=", ignoreCase = true) }
-            ?.substringAfter('=')
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: issuerRaw.take(60).ifBlank {
-                if (persian) "صادرکننده ناشناس" else "Unknown issuer"
-            }
+            null
+        } ?: if (persian) "صادرکننده ناشناس" else "Unknown issuer"
 
         val until = try {
             cert.validNotAfterDate?.let {
